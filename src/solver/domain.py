@@ -35,12 +35,6 @@ except ImportError:
         ZERO = None
 
 
-class OptimizationObjective(Enum):
-    """Optimization objectives for VRPTW route planning"""
-    CLUSTERED = "clustered"           # Minimize route geographical spread
-    SHORTEST_DISTANCE = "shortest_distance"  # Minimize total travel distance
-    EVEN_STOPS = "even_stops"         # Balance stops across all vehicles
-    RADIAL = "radial"                 # Optimize for depot-centric out-and-back patterns
 
 
 @dataclass(frozen=True)

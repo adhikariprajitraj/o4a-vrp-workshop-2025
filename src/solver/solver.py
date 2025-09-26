@@ -48,43 +48,32 @@ except ImportError:
     TIMEFOLD_AVAILABLE = False
     logging.warning("Timefold not available. Solver will use fallback implementation.")
 
-from .domain import VrptwSolution, Vehicle, Customer, Location, DriverProfile, OptimizationObjective
-from .constraints import create_constraint_provider
+from .domain import VrptwSolution, Vehicle, Customer, Location, DriverProfile
+from .constraints import create_constraint_provider, ACTIVE_CONSTRAINTS
 
 
 class VrptwSolver:
     """Main solver class for VRPTW with configurable optimization objectives"""
     
-    def __init__(self, solving_time_seconds: int = 30, objective: OptimizationObjective = OptimizationObjective.SHORTEST_DISTANCE, minimize_vehicles: bool = True, parallel: bool = False, enforce_capacity: bool = True, enforce_time_windows: bool = True):
+    def __init__(self, solving_time_seconds: int = 30, parallel: bool = False):
         """
         Initialize the solver with configuration
-        
+
         Args:
             solving_time_seconds: Maximum time to spend solving (default: 30s)
-            objective: Optimization objective to use (default: SHORTEST_DISTANCE)
-            minimize_vehicles: Whether to minimize vehicle usage as primary objective (default: True)
             parallel: Whether to enable parallel solving within Timefold (default: False)
-            enforce_capacity: Whether to enforce vehicle capacity as hard constraint (default: True)
-            enforce_time_windows: Whether to enforce time windows as hard constraint (default: True)
+
+        Note: Constraints are automatically loaded from ACTIVE_CONSTRAINTS in constraints.py
         """
         self.solving_time_seconds = solving_time_seconds
-        self.objective = objective
-        self.minimize_vehicles = minimize_vehicles
         self.parallel = parallel
-        self.enforce_capacity = enforce_capacity
-        self.enforce_time_windows = enforce_time_windows
         self.solver = self._create_solver() if TIMEFOLD_AVAILABLE else None
         
     def _create_solver(self):
         """Create and configure the Timefold solver with basic settings"""
-        
-        # Create constraint provider with current configuration
-        constraint_provider = create_constraint_provider(
-            objective=self.objective,
-            minimize_vehicles=self.minimize_vehicles,
-            enforce_capacity=self.enforce_capacity,
-            enforce_time_windows=self.enforce_time_windows
-        )
+
+        # Create constraint provider with auto-loaded constraints
+        constraint_provider = create_constraint_provider()
         
         # Create solver configuration with hierarchical scoring
         solver_config = SolverConfig(
@@ -117,7 +106,7 @@ class VrptwSolver:
                     solution_class=VrptwSolution,
                     entity_class_list=[Vehicle],
                     score_director_factory_config=ScoreDirectorFactoryConfig(
-                        constraint_provider_function=vrptw_constraints
+                        constraint_provider_function=constraint_provider
                     ),
                     termination_config=TerminationConfig(
                         spent_limit=Duration(seconds=self.solving_time_seconds)
@@ -147,8 +136,8 @@ class VrptwSolver:
         # Enable detailed solver logging
         logger = logging.getLogger(__name__)
         logger.info(f"Solver configuration:")
-        logger.info(f"  - Objective: {self.objective}")
-        logger.info(f"  - Minimize vehicles: {self.minimize_vehicles}")
+        logger.info(f"  - Active constraints: {len(ACTIVE_CONSTRAINTS)}")
+        logger.info(f"  - Constraint names: {[func.__name__ for func in ACTIVE_CONSTRAINTS]}")
         logger.info(f"  - Time limit: {self.solving_time_seconds}s")
         logger.info(f"  - Parallel: {self.parallel}")
         
@@ -277,10 +266,9 @@ if __name__ == "__main__":
     print(f"\nSolution found!")
     print(f"Final score: {solution.score}")
     print(f"Total distance: {solution.get_total_distance():.1f}")
-    print(f"Personality mismatches: {solution.get_total_personality_mismatches()}")
-    
+
     for vehicle in solution.vehicles:
-        print(f"\n{vehicle.driver.name} ({vehicle.driver.personality.value}):")
+        print(f"\n{vehicle.driver.name}:")
         print(f"  Visits: {len(vehicle.visits)} customers")
         print(f"  Total demand: {vehicle.get_total_demand()}")
         print(f"  Distance: {vehicle.get_total_distance():.1f}")

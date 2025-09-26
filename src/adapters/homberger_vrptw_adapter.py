@@ -10,7 +10,7 @@ from typing import List, Dict
 from src.io.dataloaders import HombergerDataLoader
 from src.solver.domain import (
     VrptwSolution, Vehicle, Customer, Location, 
-    DriverProfile, OptimizationObjective
+    DriverProfile
 )
 
 
@@ -127,52 +127,6 @@ class HombergerVRPTWAdapter:
         
         return vehicles
 
-
-def generate_optimization_report(solution: VrptwSolution, objective: OptimizationObjective) -> Dict:
-    """Generate a detailed report of optimization results"""
-    
-    total_customers = len(solution.customers)
-    total_assigned = sum(len(v.visits) for v in solution.vehicles)
-    
-    # Import here to avoid circular import
-    from ..solver.constraints import calculate_objective_penalty
-    
-    total_penalty = 0
-    route_scores = []
-    
-    for vehicle in solution.vehicles:
-        if len(vehicle.visits) > 0:
-            penalty = calculate_objective_penalty(vehicle, objective)
-            score = max(0, 1000 - penalty)  # Convert penalty to score
-            route_scores.append(score)
-            total_penalty += penalty
-    
-    avg_score = sum(route_scores) / len(route_scores) if route_scores else 0
-    
-    return {
-        'objective': objective.value,
-        'total_customers': total_customers,
-        'total_assigned': total_assigned,
-        'unassigned': len(solution.get_unassigned_customers()),
-        'total_distance': solution.get_total_distance(),
-        'total_penalty': total_penalty,
-        'average_route_score': avg_score,
-        'active_vehicles': len([v for v in solution.vehicles if len(v.visits) > 0])
-    }
-
-
-def create_comparison_problems(dataset_path: str) -> Dict[str, VrptwSolution]:
-    """Create problems for comparing different objectives"""
-    
-    adapter = HombergerVRPTWAdapter()
-    
-    # Create identical problems - differences will be in the objective used during solving
-    problems = {
-        'problem1': adapter.adapt_dataset(dataset_path, num_vehicles=10),
-        'problem2': adapter.adapt_dataset(dataset_path, num_vehicles=10)
-    }
-    
-    return problems
 
 
 if __name__ == "__main__":

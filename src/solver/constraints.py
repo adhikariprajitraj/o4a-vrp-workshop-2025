@@ -21,47 +21,72 @@ except ImportError:
         @staticmethod
         def equal(*args): return None
 
-from .domain import Vehicle, Customer, OptimizationObjective
+from .domain import Vehicle, Customer
 import logging
 
 # Set up constraint logging
 constraint_logger = logging.getLogger('constraints')
 
 
-# Remove all global variables - pass parameters properly instead
+# Auto-Loading Constraint System
+# =============================
+#
+# To add your own custom constraint, simply:
+# 1. Define your constraint function (see examples below)
+# 2. Add it to the ACTIVE_CONSTRAINTS list at the bottom of this file
+# 3. The solver will automatically load and use all constraints in the list
+#
+# Example custom constraint:
+#
+# def my_custom_constraint(constraint_factory):
+#     """Example: Penalize routes with more than 10 stops"""
+#     return (constraint_factory
+#             .for_each(Vehicle)
+#             .filter(lambda vehicle: len(vehicle.visits) > 10)
+#             .penalize(HardMediumSoftScore.ONE_SOFT,
+#                      lambda vehicle: (len(vehicle.visits) - 10) * 100)
+#             .as_constraint("Too many stops penalty"))
+#
+# Available constraint levels:
+# - HardMediumSoftScore.ONE_HARD: Must be satisfied (violation = infeasible solution)
+# - HardMediumSoftScore.ONE_MEDIUM: Should be minimized (higher priority than soft)
+# - HardMediumSoftScore.ONE_SOFT: Nice to have (lowest priority)
+#
+# Useful Vehicle properties:
+# - vehicle.visits: List of Customer objects assigned to this vehicle
+# - vehicle.capacity: Maximum capacity of the vehicle
+# - vehicle.home_location: Starting/ending depot location
+# - vehicle.get_total_demand(): Total demand of all assigned customers
+# - vehicle.get_total_distance(): Total travel distance for the route
+#
+# Useful Customer properties:
+# - customer.location: Location object with x, y coordinates
+# - customer.demand: Resource demand (weight, volume, etc.)
+# - customer.ready_time: Earliest service time
+# - customer.due_time: Latest service time
+# - customer.service_time: Time needed to serve this customer
 
-def create_constraint_provider(objective: OptimizationObjective, minimize_vehicles: bool = True, 
-                              enforce_capacity: bool = True, enforce_time_windows: bool = True):
-    """Factory function to create constraint provider with specific configuration"""
-    
+def create_constraint_provider(constraints_list: list = None):
+    """Factory function to create constraint provider with a list of constraints
+
+    Args:
+        constraints_list: List of constraint functions to apply.
+                         If None, uses the ACTIVE_CONSTRAINTS list from this module
+    """
+    if constraints_list is None:
+        constraints_list = ACTIVE_CONSTRAINTS
+
     @constraint_provider
     def vrptw_constraints(constraint_factory):
-        """Define all constraints for VRPTW with specific configuration"""
+        """Define all constraints for VRPTW"""
         constraints = []
-        
-        # Add objective-specific constraint based on the selected optimization objective
-        if objective == OptimizationObjective.CLUSTERED:
-            constraints.append(clustering_constraint(constraint_factory))
-        elif objective == OptimizationObjective.SHORTEST_DISTANCE:
-            constraints.append(distance_constraint(constraint_factory))
-        elif objective == OptimizationObjective.EVEN_STOPS:
-            constraints.append(even_stops_constraint(constraint_factory))
-        elif objective == OptimizationObjective.RADIAL:
-            constraints.append(radial_constraint(constraint_factory))
-        
-        # Add hard constraints if enabled
-        if enforce_capacity:
-            constraints.append(vehicle_capacity_constraint(constraint_factory))
-        
-        if enforce_time_windows:
-            constraints.append(time_window_constraint(constraint_factory))
-        
-        # Add vehicle minimization constraint if enabled
-        if minimize_vehicles:
-            constraints.append(minimize_vehicles_constraint(constraint_factory))
-        
+
+        # Apply all constraints from the list
+        for constraint_func in constraints_list:
+            constraints.append(constraint_func(constraint_factory))
+
         return constraints
-    
+
     return vrptw_constraints
 
 
@@ -85,82 +110,6 @@ def time_window_constraint(constraint_factory):
             .as_constraint("Time windows"))
 
 
-def objective_optimization_constraint(constraint_factory, objective: OptimizationObjective):
-    """Soft constraint: Optimize routes based on the selected objective (SOFT level)"""
-    # Use string representation instead of .value for Java interop
-    objective_name = str(objective).split('.')[-1].lower()  # Get "clustered" from "OptimizationObjective.CLUSTERED"
-    
-    # Create the penalty function that captures the objective
-    def penalty_function(vehicle):
-        return calculate_objective_penalty(vehicle, objective)
-    
-    return (constraint_factory
-            .for_each(Vehicle)
-            .filter(lambda vehicle: len(vehicle.visits) > 0)  # Only penalize vehicles with customers
-            .penalize(HardMediumSoftScore.ONE_SOFT, penalty_function)
-            .as_constraint(f"Optimize for {objective_name}"))
-
-
-def clustering_constraint(constraint_factory):
-    """Direct clustering constraint - minimizes geographical spread of routes"""
-    return (constraint_factory
-            .for_each(Vehicle)
-            .filter(lambda vehicle: len(vehicle.visits) >= 2)  # Only vehicles with 2+ customers
-            .penalize(HardMediumSoftScore.ONE_SOFT,
-                     lambda vehicle: calculate_cluster_penalty(vehicle))
-            .as_constraint("Clustering penalty"))
-
-
-def distance_constraint(constraint_factory):
-    """Distance constraint - minimizes total travel distance"""
-    return (constraint_factory
-            .for_each(Vehicle)
-            .filter(lambda vehicle: len(vehicle.visits) > 0)  # Only vehicles with customers
-            .penalize(HardMediumSoftScore.ONE_SOFT,
-                     lambda vehicle: calculate_distance_penalty(vehicle))
-            .as_constraint("Distance penalty"))
-
-
-def even_stops_constraint(constraint_factory):
-    """Even stops constraint - balances stops across vehicles"""
-    return (constraint_factory
-            .for_each(Vehicle)
-            .filter(lambda vehicle: len(vehicle.visits) > 0)  # Only vehicles with customers
-            .penalize(HardMediumSoftScore.ONE_SOFT,
-                     lambda vehicle: calculate_even_stops_penalty(vehicle))
-            .as_constraint("Even stops penalty"))
-
-
-def radial_constraint(constraint_factory):
-    """Radial constraint - optimizes for depot-centric patterns"""
-    return (constraint_factory
-            .for_each(Vehicle)
-            .filter(lambda vehicle: len(vehicle.visits) > 0)  # Only vehicles with customers
-            .penalize(HardMediumSoftScore.ONE_SOFT,
-                     lambda vehicle: calculate_radial_penalty(vehicle))
-            .as_constraint("Radial penalty"))
-
-
-def debug_clustering_constraint(constraint_factory):
-    """Debug constraint to test clustering penalty application"""
-    return (constraint_factory
-            .for_each(Vehicle)
-            .filter(lambda vehicle: len(vehicle.visits) > 0)  # Only vehicles with customers
-            .penalize(HardMediumSoftScore.ONE_SOFT,
-                     lambda vehicle: len(vehicle.visits) * 1000)  # 1000 per customer
-            .as_constraint("Debug clustering"))
-
-
-def simple_test_constraint(constraint_factory):
-    """Simple test constraint to verify constraint system is working"""
-    return (constraint_factory
-            .for_each(Vehicle)
-            .filter(lambda vehicle: len(vehicle.visits) > 0)  # Only vehicles with customers
-            .penalize(HardMediumSoftScore.ONE_SOFT,
-                     lambda vehicle: 100)  # Fixed penalty of 100 per vehicle with customers
-            .as_constraint("Test constraint"))
-
-
 def minimize_vehicles_constraint(constraint_factory):
     """Medium constraint: Minimize the number of vehicles used (PRIMARY objective at MEDIUM level)"""
     return (constraint_factory
@@ -171,7 +120,17 @@ def minimize_vehicles_constraint(constraint_factory):
             .as_constraint("Minimize vehicles"))
 
 
-# Helper functions for constraint calculations
+
+def minimize_total_distance_constraint(constraint_factory):
+    """Example: Minimize total travel distance across all routes"""
+    return (constraint_factory
+            .for_each(Vehicle)
+            .filter(lambda vehicle: len(vehicle.visits) > 0)
+            .penalize(HardMediumSoftScore.ONE_SOFT,
+                     lambda vehicle: int(vehicle.get_total_distance()))
+            .as_constraint("Minimize total distance"))
+
+
 
 def calculate_time_window_violation(vehicle: Vehicle) -> int:
     """Calculate the severity of time window violations"""
@@ -199,96 +158,37 @@ def calculate_time_window_violation(vehicle: Vehicle) -> int:
     return violation_penalty
 
 
-def calculate_objective_penalty(vehicle: Vehicle, objective: OptimizationObjective) -> int:
-    """Calculate penalty based on how well the route matches the optimization objective"""
-    if len(vehicle.visits) == 0:
-        return 0
-    
-    penalty = 0
-    
-    if objective == OptimizationObjective.CLUSTERED:
-        penalty = calculate_cluster_penalty(vehicle)
-    elif objective == OptimizationObjective.SHORTEST_DISTANCE:
-        penalty = calculate_distance_penalty(vehicle)
-    elif objective == OptimizationObjective.EVEN_STOPS:
-        penalty = calculate_even_stops_penalty(vehicle)
-    elif objective == OptimizationObjective.RADIAL:
-        penalty = calculate_radial_penalty(vehicle)
-    
-    return penalty
+def example_custom_constraint(constraint_factory):
+    """Template: Penalize routes with more than 8 stops (modify as needed)"""
+    return (constraint_factory
+            .for_each(Vehicle)
+            # Your condition here
+            .filter(lambda vehicle: len(vehicle.visits) > 8)
+            .penalize(HardMediumSoftScore.ONE_SOFT,
+                      # Your penalty here
+                      # You can also pass in your own function here that is defined in this file
+                     lambda vehicle: (len(vehicle.visits) - 8) * 50)
+            .as_constraint("Too many stops"))  # Your constraint name here
 
 
-def calculate_cluster_penalty(vehicle: Vehicle) -> int:
-    """Optimized clustering penalty - minimizes geographical spread"""
-    visits = vehicle.visits
-    if len(visits) < 2:
-        return 0
-    
-    # Fast centroid calculation - avoid list comprehension
-    n = len(visits)
-    cx = sum(c.location.x for c in visits) / n
-    cy = sum(c.location.y for c in visits) / n
-    
-    # Use squared distance (avoid expensive sqrt) and simpler penalty
-    penalty = 0
-    for customer in visits:
-        # Squared Euclidean distance (no sqrt needed)
-        dx = customer.location.x - cx
-        dy = customer.location.y - cy
-        squared_distance = dx * dx + dy * dy
-        
-        # Linear penalty based on squared distance (much faster than distance^3)
-        penalty += int(squared_distance * 10)  # Scale factor for meaningful penalties
-    
-    return penalty
+# =============================================================================
+# ACTIVE CONSTRAINTS LIST
+# =============================================================================
+# Add or remove constraint functions from this list to customize the solver.
+# The solver will automatically use all constraints listed here.
 
+ACTIVE_CONSTRAINTS = [
+    vehicle_capacity_constraint,
+    time_window_constraint,
+    minimize_vehicles_constraint,
 
-def calculate_distance_penalty(vehicle: Vehicle) -> int:
-    """Penalty for SHORTEST_DISTANCE drivers - just the total distance"""
-    return int(vehicle.get_total_distance())
+    # Example template constraint (uncomment to enable)
+    # minimize_total_distance_constraint,
 
+    # Add your custom constraints here:
+    # your_custom_constraint,
+]
 
-def calculate_even_stops_penalty(vehicle: Vehicle) -> int:
-    """Penalty for EVEN_STOPS drivers - penalize imbalanced routes"""
-    # This will be calculated globally by comparing all vehicles
-    # For now, slightly penalize very long or very short routes
-    num_stops = len(vehicle.visits)
-    
-    # Ideal range is 8-12 stops
-    if num_stops < 5:
-        return (5 - num_stops) * 50  # Penalty for too few stops
-    elif num_stops > 15:
-        return (num_stops - 15) * 50  # Penalty for too many stops
-    
-    return 0
-
-
-def calculate_radial_penalty(vehicle: Vehicle) -> int:
-    """Penalty for RADIAL drivers - penalize non-radial patterns"""
-    if len(vehicle.visits) < 2:
-        return 0
-    
-    depot = vehicle.home_location
-    penalty = 0
-    
-    # Penalize routes that don't follow a radial pattern
-    # A good radial route goes out from depot and returns
-    for i in range(len(vehicle.visits) - 1):
-        current = vehicle.visits[i]
-        next_customer = vehicle.visits[i + 1]
-        
-        # Calculate distances from depot
-        current_dist_from_depot = depot.distance_to(current.location)
-        next_dist_from_depot = depot.distance_to(next_customer.location)
-        
-        # Penalize if we're moving towards depot in the middle of the route
-        if i < len(vehicle.visits) // 2 and next_dist_from_depot < current_dist_from_depot:
-            penalty += 100  # Moving inward too early
-        # Penalize if we're moving away from depot at the end of the route
-        elif i >= len(vehicle.visits) // 2 and next_dist_from_depot > current_dist_from_depot:
-            penalty += 100  # Moving outward too late
-    
-    return penalty
 
 
 
