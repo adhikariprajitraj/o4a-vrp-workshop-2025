@@ -28,6 +28,8 @@ A hands-on workshop for solving Vehicle Routing Problems (VRP) with Time Windows
    pip install -r requirements.txt
    ```
 
+   > This step should take you around $5-10$ minutes. 
+
 ### Running the Application
 
 1. **Run the web interface**:
