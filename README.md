@@ -6,8 +6,32 @@ A hands-on workshop for solving Vehicle Routing Problems (VRP) with Time Windows
 ## 🚀 Quick Start
 
 ### Prerequisites
+- Java >= 17
 - Python 3.10.12
 - pip (Python package manager)
+
+> [!NOTE]
+> Timefold requires the JVM to run, so you'll need to install that first
+
+**macOS:**
+```bash
+brew install openjdk
+```
+
+After installation, symlink it for macOS to recognize it:
+```bash
+sudo ln -sfn /opt/homebrew/opt/openjdk/libexec/openjdk.jdk /Library/Java/JavaVirtualMachines/openjdk.jdk
+```
+
+**Windows:**
+1. Download OpenJDK from [Adoptium](https://adoptium.net/) or [Oracle](https://www.oracle.com/java/technologies/downloads/)
+2. Run the installer and follow the installation wizard
+3. The installer will automatically set up the `JAVA_HOME` environment variable
+
+Verify installation:
+```bash
+java -version
+```
 
 ### Installation
 
