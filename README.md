@@ -41,10 +41,20 @@ java -version
    cd o4a-vrp-workshop-2025
    ```
 
-2. **Create a virtual environment** (recended):
+2. **Create a virtual environment** (recommended):
+
+   **Using standard venv:**
    ```bash
    python3.10 -m venv venv
    source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+
+   **Using pyenv:**
+   ```bash
+   pyenv install 3.10.12
+   pyenv local 3.10.12
+   pyenv virtualenv 3.10.12 o4a-vrp
+   pyenv activate o4a-vrp
    ```
 
 3. **Install dependencies**:
