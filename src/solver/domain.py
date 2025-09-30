@@ -59,6 +59,7 @@ class Customer:
     ready_time: float
     due_time: float
     service_time: float = 0.0
+    is_premium: bool = False
 
 
 @dataclass

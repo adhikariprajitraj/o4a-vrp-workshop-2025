@@ -76,6 +76,11 @@ class HombergerDataLoader(DataLoader):
                         'due_time': int(parts[5]),
                         'service_time': int(parts[6])
                     }
+                    # Add premium field if available (8th column)
+                    if len(parts) >= 8:
+                        customer['is_premium'] = bool(int(parts[7]))
+                    else:
+                        customer['is_premium'] = False
                     customers.append(customer)
         
         return {

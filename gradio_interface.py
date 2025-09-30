@@ -27,17 +27,25 @@ from src.io.dataloaders import HombergerDataLoader
 
 def get_available_datasets() -> List[str]:
     """Get list of available Homberger dataset files"""
+    datasets = ["Sample Dataset"]
+
+    # Get datasets from homberger_200_customer_instances
     data_dir = Path("data/homberger_200_customer_instances")
-    if not data_dir.exists():
-        return ["Sample Dataset"]
+    if data_dir.exists():
+        pattern = str(data_dir / "*.TXT")
+        for file_path in sorted(glob.glob(pattern)):
+            filename = Path(file_path).stem
+            datasets.append(f"homberger/{filename}")
 
-    datasets = []
-    pattern = str(data_dir / "*.TXT")
-    for file_path in sorted(glob.glob(pattern)):
-        filename = Path(file_path).stem
-        datasets.append(filename)
+    # Get datasets from scenario_2
+    scenario2_dir = Path("data/scenario_2")
+    if scenario2_dir.exists():
+        pattern = str(scenario2_dir / "*.TXT")
+        for file_path in sorted(glob.glob(pattern)):
+            filename = Path(file_path).stem
+            datasets.append(f"scenario_2/{filename}")
 
-    return ["Sample Dataset"] + datasets
+    return datasets
 
 
 def load_homberger_dataset(dataset_name: str) -> Dict[str, Any]:
@@ -46,7 +54,17 @@ def load_homberger_dataset(dataset_name: str) -> Dict[str, Any]:
         return create_sample_dataset()
 
     try:
-        file_path = f"data/homberger_200_customer_instances/{dataset_name}.TXT"
+        # Parse dataset name to get directory and filename
+        if dataset_name.startswith("homberger/"):
+            filename = dataset_name.replace("homberger/", "")
+            file_path = f"data/homberger_200_customer_instances/{filename}.TXT"
+        elif dataset_name.startswith("scenario_2/"):
+            filename = dataset_name.replace("scenario_2/", "")
+            file_path = f"data/scenario_2/{filename}.TXT"
+        else:
+            # Legacy support for old format
+            file_path = f"data/homberger_200_customer_instances/{dataset_name}.TXT"
+
         loader = HombergerDataLoader(file_path)
         df = loader.load()
 
@@ -77,7 +95,8 @@ def load_homberger_dataset(dataset_name: str) -> Dict[str, Any]:
                 "demand": int(row[3]),  # demand
                 "ready_time": int(row[4]),  # ready_time
                 "due_time": int(row[5]),  # due_time
-                "service_time": int(row[6]) if len(row) > 6 else 0  # service_time
+                "service_time": int(row[6]) if len(row) > 6 else 0,  # service_time
+                "is_premium": bool(row[7]) if len(row) > 7 else False  # is_premium
             })
 
             # Limit to reasonable size for demo
@@ -105,14 +124,14 @@ def create_sample_dataset() -> Dict[str, Any]:
             {"id": 3, "driver": "Driver 3", "capacity": 200}
         ],
         "customers": [
-            {"id": 1, "x": 20, "y": 30, "demand": 25, "ready_time": 0, "due_time": 100},
-            {"id": 2, "x": 80, "y": 70, "demand": 30, "ready_time": 0, "due_time": 120},
-            {"id": 3, "x": 40, "y": 80, "demand": 20, "ready_time": 0, "due_time": 150},
-            {"id": 4, "x": 60, "y": 20, "demand": 35, "ready_time": 0, "due_time": 110},
-            {"id": 5, "x": 30, "y": 60, "demand": 40, "ready_time": 0, "due_time": 140},
-            {"id": 6, "x": 70, "y": 40, "demand": 15, "ready_time": 0, "due_time": 130},
-            {"id": 7, "x": 90, "y": 20, "demand": 45, "ready_time": 0, "due_time": 100},
-            {"id": 8, "x": 10, "y": 70, "demand": 25, "ready_time": 0, "due_time": 160}
+            {"id": 1, "x": 20, "y": 30, "demand": 25, "ready_time": 0, "due_time": 100, "is_premium": False},
+            {"id": 2, "x": 80, "y": 70, "demand": 30, "ready_time": 0, "due_time": 120, "is_premium": False},
+            {"id": 3, "x": 40, "y": 80, "demand": 20, "ready_time": 0, "due_time": 150, "is_premium": False},
+            {"id": 4, "x": 60, "y": 20, "demand": 35, "ready_time": 0, "due_time": 110, "is_premium": False},
+            {"id": 5, "x": 30, "y": 60, "demand": 40, "ready_time": 0, "due_time": 140, "is_premium": False},
+            {"id": 6, "x": 70, "y": 40, "demand": 15, "ready_time": 0, "due_time": 130, "is_premium": False},
+            {"id": 7, "x": 90, "y": 20, "demand": 45, "ready_time": 0, "due_time": 100, "is_premium": False},
+            {"id": 8, "x": 10, "y": 70, "demand": 25, "ready_time": 0, "due_time": 160, "is_premium": False}
         ]
     }
 
@@ -151,7 +170,8 @@ def convert_to_solver_format(dataset: Dict[str, Any]) -> 'VrptwSolution':
                 demand=customer_data['demand'],
                 ready_time=customer_data['ready_time'],
                 due_time=customer_data['due_time'],
-                service_time=customer_data.get('service_time', 0)
+                service_time=customer_data.get('service_time', 0),
+                is_premium=customer_data.get('is_premium', False)
             )
             customers.append(customer)
 
@@ -468,8 +488,8 @@ Click 'Run Solver' to optimize routes.
 
 if __name__ == "__main__":
     # Create and launch the interface
-    interface = create_interface()
-    interface.launch(
+    demo = create_interface()
+    demo.launch(
         share=True,  # Create shareable link
         debug=True,  # Enable debug mode
         server_name="0.0.0.0",  # Allow external connections
