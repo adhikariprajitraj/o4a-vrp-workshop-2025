@@ -2,4 +2,5 @@
 
 /venv
 lib/python*/site-packages
-
+*.pyc
+__pycache__/

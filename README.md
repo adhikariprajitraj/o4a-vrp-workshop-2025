@@ -6,7 +6,7 @@ A hands-on workshop for solving Vehicle Routing Problems (VRP) with Time Windows
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Python 3.10.12
+([Download Python 3.10.11](https://www.python.org/downloads/release/python-31011/))
 - pip (Python package manager)
 
 ### Installation
