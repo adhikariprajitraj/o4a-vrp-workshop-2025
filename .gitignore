@@ -4,3 +4,4 @@
 lib/python*/site-packages
 *.pyc
 __pycache__/
+/venv*
